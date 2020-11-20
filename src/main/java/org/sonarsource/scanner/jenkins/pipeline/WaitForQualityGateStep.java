@@ -41,17 +41,6 @@ import hudson.plugins.sonar.utils.SonarUtils;
 import hudson.security.ACL;
 import hudson.util.FormValidation;
 import hudson.util.ListBoxModel;
-import java.io.IOException;
-import java.io.Serializable;
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.List;
-import java.util.Objects;
-import java.util.Optional;
-import java.util.Set;
-import java.util.UUID;
-import java.util.logging.Logger;
-import javax.annotation.Nullable;
 import jenkins.model.Jenkins;
 import org.apache.commons.codec.digest.HmacAlgorithms;
 import org.apache.commons.codec.digest.HmacUtils;
@@ -68,6 +57,19 @@ import org.kohsuke.stapler.AncestorInPath;
 import org.kohsuke.stapler.DataBoundConstructor;
 import org.kohsuke.stapler.DataBoundSetter;
 import org.kohsuke.stapler.QueryParameter;
+
+import javax.annotation.Nullable;
+import java.io.IOException;
+import java.io.Serializable;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.Date;
+import java.util.List;
+import java.util.Objects;
+import java.util.Optional;
+import java.util.Set;
+import java.util.UUID;
+import java.util.logging.Logger;
 
 public class WaitForQualityGateStep extends Step implements Serializable {
 
@@ -223,7 +225,18 @@ public class WaitForQualityGateStep extends Step implements Serializable {
       SonarInstallation inst = getInstallation();
       WsClient wsClient = new WsClient(new HttpClient(), step.getServerUrl(), SonarUtils.getAuthenticationToken(getContextClass(Run.class), inst, step.credentialsId));
       WsClient.CETask ceTask = wsClient.getCETask(step.getTaskId());
-      log("SonarQube task '%s' status is '%s'", step.taskId, ceTask.getStatus());
+      int counter = 0;
+      int max_counter = 50;
+      while("IN_PROGRESS".equals(ceTask.getStatus()) && counter < max_counter) {
+        try {
+          Thread.sleep(10000);
+          counter++;
+        } catch (InterruptedException e) {
+          e.printStackTrace();
+        }
+        ceTask = wsClient.getCETask(step.getTaskId());
+        log("SonarQube task '%s' status is '%s', wait for next query, %s", step.taskId, ceTask.getStatus(), new Date());
+      }
       switch (ceTask.getStatus()) {
         case WsClient.CETask.STATUS_SUCCESS:
           String status = wsClient.requestQualityGateStatus(ceTask.getAnalysisId());
@@ -281,10 +294,10 @@ public class WaitForQualityGateStep extends Step implements Serializable {
     }
 
     private void checkQualityGate(String taskStatus, @Nullable String qgStatus) {
-      log("SonarQube task '%s' status is '%s'", step.taskId, taskStatus);
+      log("SonarQube task '%s' status is  '%s' (update)", step.taskId, taskStatus);
       switch (taskStatus) {
         case WsClient.CETask.STATUS_SUCCESS:
-          log("SonarQube task '%s' completed. Quality gate is '%s'", step.taskId, qgStatus);
+          log("SonarQube task '%s' completed.wait for next call, Quality gate is '%s'", step.taskId, qgStatus);
           handleQGStatus(qgStatus);
           break;
         case WsClient.CETask.STATUS_FAILURE:
