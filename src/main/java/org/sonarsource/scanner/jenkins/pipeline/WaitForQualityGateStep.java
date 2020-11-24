@@ -63,7 +63,6 @@ import java.io.IOException;
 import java.io.Serializable;
 import java.util.ArrayList;
 import java.util.Collections;
-import java.util.Date;
 import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
@@ -227,16 +226,18 @@ public class WaitForQualityGateStep extends Step implements Serializable {
       WsClient.CETask ceTask = wsClient.getCETask(step.getTaskId());
       int counter = 0;
       int max_counter = 50;
-      while("IN_PROGRESS".equals(ceTask.getStatus()) && counter < max_counter) {
+      log("SonarQube task '%s' status is '%s'", step.taskId, ceTask.getStatus());
+      while(("IN_PROGRESS".equals(ceTask.getStatus()) || "PENDING".equals(ceTask.getStatus())) && counter < max_counter) {
         try {
+          log("status is '%s', wait for next query", ceTask.getStatus());
           Thread.sleep(10000);
           counter++;
         } catch (InterruptedException e) {
           e.printStackTrace();
         }
         ceTask = wsClient.getCETask(step.getTaskId());
-        log("SonarQube task '%s' status is '%s', wait for next query, %s", step.taskId, ceTask.getStatus(), new Date());
       }
+      log("status is '%s'", ceTask.getStatus());
       switch (ceTask.getStatus()) {
         case WsClient.CETask.STATUS_SUCCESS:
           String status = wsClient.requestQualityGateStatus(ceTask.getAnalysisId());
